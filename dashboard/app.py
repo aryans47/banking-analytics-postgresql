@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import psycopg
 import plotly.express as px
-import tomllib
 
 # ---------------- PAGE CONFIGURATION ----------------
 
@@ -20,11 +19,8 @@ st.caption("PostgreSQL-powered Banking Analytics Platform")
 
 @st.cache_resource
 def get_connection():
-    with open(".streamlit/secrets.toml", "rb") as f:
-        config = tomllib.load(f)
-
     return psycopg.connect(
-        config["DATABASE_URL"],
+        st.secrets["DATABASE_URL"],
         connect_timeout=20
     )
 
