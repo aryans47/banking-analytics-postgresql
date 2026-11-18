@@ -306,6 +306,10 @@ Current dataset results:
 ```text
 banking-analytics-postgresql/
 │
+├── dashboard/
+│   ├── app.py
+│   └── requirements.txt
+│
 ├── database/
 │   ├── 01_create_tables.sql
 │   ├── 02_insert_data.sql
@@ -315,6 +319,7 @@ banking-analytics-postgresql/
 │   ├── 06_performance_partitioning.sql
 │   └── README.md
 │
+├── .gitignore
 └── README.md
 ```
 
