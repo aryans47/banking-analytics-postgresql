@@ -15,24 +15,37 @@ st.set_page_config(
 st.title("🏦 Banking Analytics & Risk Intelligence")
 st.caption("PostgreSQL-powered Banking Analytics Platform")
 
+
 # ---------------- DATABASE CONNECTION ----------------
 
-@st.cache_resource
-def get_connection():
-    return psycopg.connect(
-        st.secrets["DATABASE_URL"],
-        connect_timeout=20
-    )
-
 def load_data(query):
-    with get_connection().cursor() as cur:
-        cur.execute(query)
-        rows = cur.fetchall()
-        columns = [desc.name for desc in cur.description]
+    """
+    Opens a fresh Neon PostgreSQL connection for each query.
+    The connection is closed automatically after the query.
+    """
+
+    with psycopg.connect(
+        st.secrets["DATABASE_URL"],
+        connect_timeout=20,
+        sslmode="require"
+    ) as conn:
+
+        with conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+
+            columns = [
+                description.name
+                for description in cur.description
+            ]
 
     return pd.DataFrame(rows, columns=columns)
 
+
+# ---------------- MAIN DASHBOARD ----------------
+
 try:
+
     # ---------------- EXECUTIVE KPIs ----------------
 
     kpis = load_data("""
@@ -46,13 +59,25 @@ try:
 
     kpi = kpis.iloc[0]
 
-    st.subheader("Executive Overview")
+    st.subheader("📊 Executive Overview")
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Total Customers", f"{int(kpi['total_customers']):,}")
-    c2.metric("Total Accounts", f"{int(kpi['total_accounts']):,}")
-    c3.metric("Transactions", f"{int(kpi['total_transactions']):,}")
+    c1.metric(
+        "Total Customers",
+        f"{int(kpi['total_customers']):,}"
+    )
+
+    c2.metric(
+        "Total Accounts",
+        f"{int(kpi['total_accounts']):,}"
+    )
+
+    c3.metric(
+        "Transactions",
+        f"{int(kpi['total_transactions']):,}"
+    )
+
     c4.metric(
         "Transaction Volume",
         f"₹{float(kpi['total_transaction_volume']):,.0f}"
@@ -64,18 +89,28 @@ try:
         "Deposit Balance",
         f"₹{float(kpi['total_deposit_balance']):,.0f}"
     )
+
     c6.metric(
         "Loan Exposure",
         f"₹{float(kpi['total_loan_exposure']):,.0f}"
     )
-    c7.metric("NPA Loans", int(kpi["npa_loans"]))
-    c8.metric("NPA Percentage", f"{float(kpi['npa_percentage']):.2f}%")
+
+    c7.metric(
+        "NPA Loans",
+        int(kpi["npa_loans"])
+    )
+
+    c8.metric(
+        "NPA Percentage",
+        f"{float(kpi['npa_percentage']):.2f}%"
+    )
 
     st.divider()
 
+
     # ---------------- TRANSACTION ANALYTICS ----------------
 
-    st.subheader("📊 Transaction Analytics")
+    st.subheader("📈 Transaction Analytics")
 
     monthly = load_data("""
         SELECT
@@ -90,6 +125,7 @@ try:
     left, right = st.columns(2)
 
     with left:
+
         fig = px.bar(
             monthly,
             x="month",
@@ -98,11 +134,17 @@ try:
             labels={
                 "month": "Month",
                 "transaction_volume": "Amount (₹)"
-            }
+            },
+            text_auto=".2s"
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
     with right:
+
         fig = px.line(
             monthly,
             x="month",
@@ -110,11 +152,17 @@ try:
             markers=True,
             title="Monthly Transaction Count"
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    st.divider()
+
 
     # ---------------- CUSTOMER ANALYTICS ----------------
 
-    st.divider()
     st.subheader("👥 Customer Analytics")
 
     customers = load_data("""
@@ -136,11 +184,35 @@ try:
         ORDER BY total_balance DESC;
     """)
 
-    st.dataframe(customers, use_container_width=True)
+    # Customer risk filter
+
+    risk_options = ["All"] + sorted(
+        customers["risk_profile"].dropna().unique().tolist()
+    )
+
+    selected_risk = st.selectbox(
+        "Filter customers by risk profile",
+        risk_options
+    )
+
+    if selected_risk != "All":
+        filtered_customers = customers[
+            customers["risk_profile"] == selected_risk
+        ]
+    else:
+        filtered_customers = customers
+
+    st.dataframe(
+        filtered_customers,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
+
 
     # ---------------- LOAN ANALYTICS ----------------
 
-    st.divider()
     st.subheader("💳 Loan Analytics")
 
     loans = load_data("""
@@ -156,20 +228,33 @@ try:
     left, right = st.columns(2)
 
     with left:
-        st.dataframe(loans, use_container_width=True)
+
+        st.dataframe(
+            loans,
+            use_container_width=True,
+            hide_index=True
+        )
 
     with right:
+
         fig = px.pie(
             loans,
             names="loan_type",
             values="total_principal",
-            title="Loan Exposure by Type"
+            title="Loan Exposure by Type",
+            hole=0.35
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    st.divider()
+
 
     # ---------------- FRAUD ANALYTICS ----------------
 
-    st.divider()
     st.subheader("🚨 Fraud Risk Analysis")
 
     fraud = load_data("""
@@ -184,30 +269,56 @@ try:
     left, right = st.columns(2)
 
     with left:
-        st.dataframe(fraud, use_container_width=True)
+
+        st.dataframe(
+            fraud,
+            use_container_width=True,
+            hide_index=True
+        )
 
     with right:
+
         fig = px.pie(
             fraud,
             names="fraud_risk_level",
             values="transaction_count",
-            title="Transactions by Fraud Risk Level"
+            title="Transactions by Fraud Risk Level",
+            hole=0.35
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
     st.caption(
-        "Fraud classifications are based on project-defined rules, "
-        "not machine-learning probabilities."
+        "Fraud classifications are based on project-defined "
+        "rules, not machine-learning probabilities."
     )
+
+    st.divider()
+
 
     # ---------------- FOOTER ----------------
 
-    st.divider()
-    st.success("Dashboard connected to Neon PostgreSQL successfully.")
+    st.success(
+        "Dashboard connected to Neon PostgreSQL successfully."
+    )
 
-    st.caption("Banking Analytics & Risk Intelligence Platform | PostgreSQL + Python + Streamlit")
+    st.caption(
+        "Banking Analytics & Risk Intelligence Platform "
+        "| PostgreSQL + Python + Streamlit"
+    )
+
+
+# ---------------- ERROR HANDLING ----------------
 
 except Exception as e:
-    st.error("Dashboard could not load the data.")
-    st.exception(e)
 
+    st.error(
+        "Dashboard could not load the data. "
+        "Please check the database connection and configuration."
+    )
+
+    # Detailed errors are kept out of the public dashboard.
+    print(f"Dashboard error: {type(e).__name__}: {e}")
